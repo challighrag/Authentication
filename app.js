@@ -1,117 +1,22 @@
 require("dotenv").config();
 const express = require("express");
 const mongoose = require("mongoose");
-const bcrypt = require("bcryptjs");
-const jwt = require("jsonwebtoken");
 const cookieParser = require("cookie-parser");
-const crypto = require("crypto");
+const authRouter = require("./routes/auth.route");
 
 const app = express();
+
+// middlewares
 app.use(express.json());
 app.use(cookieParser(process.env.COOKIE_SECRET));
 
-//config/db.js
+// config/database.js
 mongoose.connect(process.env.MONGODB_URI)
-    .then(() => { console.log("Connected to MONGO DB") })
-    .catch((error) => { console.log("Error connecting to MONGO DB: ", error) })
+.then(() => {console.log("Connected to MONGO DB")})
+.catch((error) => {console.log("Error connecting to MONGO DB: ",error)})
 
-//models/user.js
-const userSchema = new mongoose.Schema({
-    username: { type: String, required: true },
-    email: { type: String, required: true },
-    password: { type: String, required: true },
-    registeredAt: { type: Date, default: Date.now },
-    verificationCode: { type: String },
-    isVerified: { type: Boolean, default: false }
-});
+app.use("/auth", authRouter);
 
-userSchema.pre("save", async function (next) {
-    if (this.isModified('password')) {
-        this.password = await bcrypt.hash(this.password, 10);
-    };
-    next();
-});
-
-const User = mongoose.model("User", userSchema);
-
-//models/verificationCode.js
-const verificationCodeSchema = new mongoose.Schema({
-    userId: { type: mongoose.SchemaTypes.ObjectId, ref: "User", required: true },
-    code: { type: Number, required: true },
-    createdAt: { type: Date, default: Date.now },
-    expiresAt: { type: Date, default: () => new Date(Date.now() + 1 * 60 * 1000), expires: 0 }
-});
-
-const VerificationCode = mongoose.model("VerificationCode", verificationCodeSchema);
-
-//models/token.js
-const tokenSchema = new mongoose.Schema({
-    token: { type: String, required: true },
-    userId: { type: mongoose.SchemaTypes.ObjectId, ref: "User", required: true },
-    createdAt: { type: Date, default: Date.now }
-});
-const Token = mongoose.model("Token", tokenSchema);
-
-//utility/token.js
-const generateAccessToken = (userId) => {
-    return jwt.sign({ userId }, process.env.ACCESS_TOKEN_SECRET, { expiresIn: "15m" });
-};
-const generateRefreshToken = (userId) => {
-    return jwt.sign({ userId }, process.env.REFRESH_TOKEN_SECRET, { expiresIn: "7d" });
-};
-
-//utilities/verificationCode.js
-const generateVerificationCode = () => {
-    return crypto.randomInt(1e5, 1e6);
-};
-
-//routers/auth.js (Express.Router())
-//controller/auth.js
-app.post("/auth/register", async (req, res) => {
-    const { username, email, password } = req.body;
-    try {
-        const existing = await User.findOne({
-            $or: [{ email }, { username }]
-        });
-
-        if (existing) {
-            if (existing.username == username) {
-                return res.status(409).send({ message: "Username already exists" });
-            }
-            else {
-                return res.status(409).send({ message: "Email already exists" });
-            }
-        };
-
-        const user = new User({ username, email, password });
-        await user.save();
-
-        const newVerificationCode = generateVerificationCode();
-        const verificationCode = new VerificationCode({
-            userId: user._id,
-            code: newVerificationCode
-        });
-        await verificationCode.save();
-
-        res.status(201).json({message: `Verification code: ${verificationCode.code}`});
-
-        // const accessToken = generateAccessToken(user._id);
-        // const refreshToken = generateRefreshToken(user._id);
-
-        // const token = new Token({token: refreshToken, userId: user._id});
-        // await token.save();
-
-        // res
-        // .status(201)
-        // .cookie("refreshToken", {token: refreshToken}, {httpOnly: true, signed:true, secure:false, samesite: "strict"})
-        // .json({accessToken});
-    }
-    catch (error) {
-        console.error(`Error registering: ${error}`);
-        res.status(500).json({ message: "Internal sever error" });
-    }
-});
-
-app.listen(3000, () => {
+app.listen(3000,() => {
     console.log(`Server running on http://localhost:3000`);
 });
