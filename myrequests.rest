@@ -1,8 +1,17 @@
-POST http://localhost:3000/auth/register
+POST http://localhost:3000/auth/verify
 Content-Type: application/json
 
 {
-    "username": "Ehsan",
-    "email": "ehsan@gmail.com",
-    "password": "123456789"
+    "code": "864815",
+    "email": "2@gmail.com"
 }
+
+
+# POST http://localhost:3000/auth/register
+# Content-Type: application/json
+
+# {
+#     "username": "2",
+#     "email": "2@gmail.com",
+#     "password": "123456789"
+# }
