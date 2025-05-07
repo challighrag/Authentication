@@ -8,11 +8,13 @@ const VerificationCode = require("../models/verificationCodeModel");
 // utilites
 const generateVerificationCode = require("../utilities/verificationCode");
 const normalizeEmail = require("../utilities/email");
+const normalizeUsername = require("../utilities/normalizeUsername");
 
 
 const register = ("/register", async (req, res) => {
     const {username, email, password} = req.body;
 
+    const normalizedUsername = normalizeUsername(username);
     const normalizedEmail = normalizeEmail(email);
     const hashedPassword = await bcrypt.hash(password, 10);
 
@@ -29,7 +31,7 @@ const register = ("/register", async (req, res) => {
             }
         } 
 
-        const user = new User({username,email: normalizedEmail, password: hashedPassword});
+        const user = new User({username:normalizedUsername,email: normalizedEmail, password: hashedPassword});
         await user.save();
 
         // http::localhost:3000?token="randomeString"
@@ -60,7 +62,7 @@ const verify = ('/verify', async (req, res) => {
         const user = await User.findOne({ email: normalizedEmail });
 
         if (!user) {
-            return res.status(404).json({ message: `${normalizedEmail} not found` });
+            return res.status(404).json({ message: `${normalizedEmail} not found `});
         }
 
         const verificationCode = await VerificationCode.findOne({ userId: user._id });
@@ -89,4 +91,45 @@ const verify = ('/verify', async (req, res) => {
     }
 });
 
-module.exports = {register, verify};
+const login = ("/login", async (req, res) => {
+    const {username, password} = req.body;
+
+    const normalizedUsername = normalizeUsername(username);
+
+    try{
+        const user = await User.findOne({username: normalizedUsername});
+        if(!user){
+            return res.status(404).json({message: "User not found"});
+        }
+        if(!user.isVerified) {
+            return res.status(401).json({ message: "User is not verified" });
+        }
+        const isMatch = await bcrypt.compare(password, user.password);
+        if(!isMatch){
+            return res.status(401).json({message: "Wrong password"});
+        }
+         const newAccessToken = generateAccessToken(user._id);
+         const newRefreshToken = generateRefreshToken(user._id);
+
+         const refreshToken= new Token({userId: user._id,code: newRefreshToken});
+         await refreshToken.save();
+
+         res.status(200).json({message: "User logged in successfully", accessToken: newAccessToken, refreshToken: newRefreshToken});
+         
+
+
+
+
+
+
+    }
+    catch(error){
+        console.error(`Error registering: ${error}`);
+        res.status(500).json({message:"error login in"});
+    }
+
+
+
+})
+
+module.exports = {register, verify, login};
